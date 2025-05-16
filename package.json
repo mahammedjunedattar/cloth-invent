@@ -14,6 +14,8 @@
   "rate-limiter-flexible": "^2.4.1",
   "react-color": "^2.19.3",
   "react-tooltip": "^5.21.0",
+      "uuid": "^9.0.1"  // Required for session management
+
 
     "@ericblade/quagga2": "^1.8.4",
     "@hookform/resolvers": "^5.0.1",
