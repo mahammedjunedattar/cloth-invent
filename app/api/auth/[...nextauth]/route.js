@@ -100,7 +100,7 @@ export const authOptions = {
         sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
         path: '/',
         secure: process.env.NODE_ENV === 'production',
-        domain: process.env.NODE_ENV === 'production' ? '.https://stock-invent-mahammedjunedattars-projects.vercel.app' : undefined
+        domain: process.env.NODE_ENV === 'production' ? '.https://cloth-invent-8txg-8eyl6hhlq-mahammedjunedattars-projects.vercel.app' : undefined
       }
     }
   },
