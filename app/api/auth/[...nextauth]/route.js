@@ -1,11 +1,10 @@
-// app/api/auth/[...nextauth]/route.js
-import NextAuth from 'next-auth';
-import CredentialsProvider from 'next-auth/providers/credentials';
-import GoogleProvider from 'next-auth/providers/google';
-import { MongoDBAdapter } from '@next-auth/mongodb-adapter';
-import { z } from 'zod';
-import bcrypt from 'bcryptjs';
-import clientPromise from '@/app/lib/db';
+import NextAuth from 'next-auth';                                             
+import CredentialsProvider from 'next-auth/providers/credentials';            
+import GoogleProvider from 'next-auth/providers/google';                       
+import { MongoDBAdapter } from '@next-auth/mongodb-adapter';                   
+import { z } from 'zod';                                                        
+import bcrypt from 'bcryptjs';                                                 
+import clientPromise from '@/app/lib/db';                                       
 
 // Zod schema for credentials validation
 const credentialsSchema = z.object({
@@ -31,16 +30,16 @@ export const authOptions = {
         try {
           const parsed = credentialsSchema.safeParse(credentials);
           if (!parsed.success) return null;
-          
+
           const client = await clientPromise;
-          const db = client.db(); // Make sure this matches your DB name
-          
-          const user = await db.collection('users').findOne({ 
-            email: parsed.data.email.toLowerCase() 
+          const db = client.db(); // Ensure correct DB name
+
+          const user = await db.collection('users').findOne({
+            email: parsed.data.email.toLowerCase()
           });
 
           if (!user?.password) return null;
-          
+
           const isValid = await bcrypt.compare(parsed.data.password, user.password);
           if (!isValid) return null;
 
@@ -51,7 +50,6 @@ export const authOptions = {
             storeId: user.storeId,
             role: user.role || 'user'
           };
-          
         } catch (error) {
           console.error('Auth error:', error);
           return null;
@@ -63,24 +61,24 @@ export const authOptions = {
     strategy: 'jwt',
     maxAge: 30 * 24 * 60 * 60, // 30 days
   },
-callbacks: {
-  async jwt({ token, user, trigger, session }) {
-    if (user) {
-      token.storeId = user.storeId;
-      token.role = user.role;
+  callbacks: {
+    async jwt({ token, user, trigger, session }) {
+      if (user) {
+        token.storeId = user.storeId;
+        token.role = user.role;
+      }
+      if (trigger === 'update' && session?.storeId) {
+        token.storeId = session.storeId;
+      }
+      return token;
+    },
+    async session({ session, token }) {
+      session.user.storeId = token.storeId;
+      session.user.role = token.role;
+      session.user.id = token.sub;
+      return session;
     }
-    if (trigger === 'update' && session?.storeId) {
-      token.storeId = session.storeId;
-    }
-    return token;
-  },
-  async session({ session, token }) {
-    session.user.storeId = token.storeId;
-    session.user.role = token.role;
-    session.user.id = token.sub;
-    return session;
-  }
-}
+  }, // <-- Added comma here to separate from `pages` :contentReference[oaicite:6]{index=6}
   pages: {
     signIn: '/login',
     error: '/auth/error',
