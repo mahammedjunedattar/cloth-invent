@@ -52,7 +52,7 @@ export async function POST(request) {
       storeId: new ObjectId(), // Your store creation logic here
 
     });
-
+console.log(process.env.NEXTAUTH_URL)
     response.headers.set('Access-Control-Allow-Origin', process.env.NEXTAUTH_URL);
     response.headers.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
     response.headers.set('Access-Control-Allow-Headers', 'Content-Type');
