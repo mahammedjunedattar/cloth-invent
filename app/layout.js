@@ -27,7 +27,7 @@ export default function RootLayout({ children }) {
         {/* NextAuth session context */}
         <SessionProvider>
           {/* Protect all child routes */}
-          <AuthGuard>{children}</AuthGuard>
+          {children}
         </SessionProvider>
       </body>
     </html>
