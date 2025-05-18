@@ -1,10 +1,10 @@
-import NextAuth from 'next-auth';                                             
-import CredentialsProvider from 'next-auth/providers/credentials';            
-import GoogleProvider from 'next-auth/providers/google';                       
-import { MongoDBAdapter } from '@next-auth/mongodb-adapter';                   
-import { z } from 'zod';                                                        
-import bcrypt from 'bcryptjs';                                                 
-import clientPromise from '@/app/lib/db';                                       
+import NextAuth from 'next-auth';
+import CredentialsProvider from 'next-auth/providers/credentials';
+import GoogleProvider from 'next-auth/providers/google';
+import { MongoDBAdapter } from '@next-auth/mongodb-adapter';
+import { z } from 'zod';
+import bcrypt from 'bcryptjs';
+import clientPromise from '@/app/lib/db'; // Adjust path if needed
 
 // Zod schema for credentials validation
 const credentialsSchema = z.object({
@@ -13,12 +13,29 @@ const credentialsSchema = z.object({
 });
 
 export const authOptions = {
-  adapter: MongoDBAdapter(clientPromise),
+  adapter: MongoDBAdapter(clientPromise, {
+    databaseName: 'yourdb',
+    collections: {
+      Users: 'users',
+      Sessions: 'sessions',
+      Accounts: 'accounts',
+      VerificationTokens: 'verification_tokens',
+    },
+  }),
+
   providers: [
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+      authorization: {
+        params: {
+          prompt: 'consent',
+          access_type: 'offline',
+          response_type: 'code',
+        },
+      },
     }),
+
     CredentialsProvider({
       id: 'credentials',
       name: 'Credentials',
@@ -32,11 +49,11 @@ export const authOptions = {
           if (!parsed.success) return null;
 
           const client = await clientPromise;
-          const db = client.db(); // Ensure correct DB name
+          const db = client.db(); // Ensure this matches your DB name
 
-          const user = await db.collection('users').findOne({
-            email: parsed.data.email.toLowerCase()
-          });
+          const user = await db
+            .collection('users')
+            .findOne({ email: parsed.data.email.toLowerCase() });
 
           if (!user?.password) return null;
 
@@ -46,21 +63,24 @@ export const authOptions = {
           return {
             id: user._id.toString(),
             email: user.email,
-            name: user.name || 'User', // Required field
+            name: user.name || 'User',
             storeId: user.storeId,
-            role: user.role || 'user'
+            role: user.role || 'user',
           };
         } catch (error) {
           console.error('Auth error:', error);
           return null;
         }
-      }
-    })
+      },
+    }),
   ],
+
   session: {
     strategy: 'jwt',
-    maxAge: 30 * 24 * 60 * 60, // 30 days
+    maxAge: 24 * 60 * 60,        // 1 day
+    updateAge: 6 * 60 * 60,      // 6 hours
   },
+
   callbacks: {
     async jwt({ token, user, trigger, session }) {
       if (user) {
@@ -77,25 +97,29 @@ export const authOptions = {
       session.user.role = token.role;
       session.user.id = token.sub;
       return session;
-    }
-  }, // <-- Added comma here to separate from `pages` :contentReference[oaicite:6]{index=6}
+    },
+  },
+
   pages: {
     signIn: '/login',
     error: '/auth/error',
   },
+
   secret: process.env.NEXTAUTH_SECRET,
+
   cookies: {
     sessionToken: {
-      name: `next-auth.session-token`,
+      name: 'next-auth.session-token',
       options: {
         httpOnly: true,
         sameSite: 'lax',
-        path: '/Dashboard',
-        secure: process.env.NODE_ENV === 'production'
-      }
-    }
+        path: '/',
+        secure: process.env.NODE_ENV === 'production',
+      },
+    },
   },
-  debug: process.env.NODE_ENV === 'development'
+
+  debug: process.env.NODE_ENV === 'development',
 };
 
 const handler = NextAuth(authOptions);
