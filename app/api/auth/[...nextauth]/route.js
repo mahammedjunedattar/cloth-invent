@@ -85,7 +85,7 @@ callbacks: {
     signIn: '/login',
     error: '/auth/error',
   },
-  secret: process.env.NEXTAUTH_SECRETS,
+  secret: process.env.NEXTAUTH_SECRET,
   cookies: {
     sessionToken: {
       name: `next-auth.session-token`,
