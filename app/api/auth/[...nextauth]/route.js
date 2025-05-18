@@ -92,7 +92,7 @@ callbacks: {
       options: {
         httpOnly: true,
         sameSite: 'lax',
-        path: '/',
+        path: '/Dashboard',
         secure: process.env.NODE_ENV === 'production'
       }
     }
