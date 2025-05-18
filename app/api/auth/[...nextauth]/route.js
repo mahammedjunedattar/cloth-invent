@@ -63,21 +63,24 @@ export const authOptions = {
     strategy: 'jwt',
     maxAge: 30 * 24 * 60 * 60, // 30 days
   },
-  callbacks: {
-    async jwt({ token, user }) {
-      if (user) {
-        token.storeId = user.storeId;
-        token.role = user.role;
-        
-      }
-      return token;
-    },
-    async session({ session, token }) {
-      session.user.storeId = token.storeId;
-      session.user.role = token.role;
-      return session;
+callbacks: {
+  async jwt({ token, user, trigger, session }) {
+    if (user) {
+      token.storeId = user.storeId;
+      token.role = user.role;
     }
+    if (trigger === 'update' && session?.storeId) {
+      token.storeId = session.storeId;
+    }
+    return token;
   },
+  async session({ session, token }) {
+    session.user.storeId = token.storeId;
+    session.user.role = token.role;
+    session.user.id = token.sub;
+    return session;
+  }
+}
   pages: {
     signIn: '/login',
     error: '/auth/error',
