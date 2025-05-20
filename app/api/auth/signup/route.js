@@ -11,7 +11,6 @@ const signupSchema = z.object({
   password: z.string().min(6)
 });
 
-// Add OPTIONS handler for CORS preflight
 export async function OPTIONS() {
   return new Response(null, {
     headers: {
@@ -23,6 +22,20 @@ export async function OPTIONS() {
 }
 
 export async function POST(request) {
+  // Verify MongoDB connection first
+  let db;
+  try {
+    const client = await connectToDB();
+    db = client.db();
+  } catch (dbError) {
+    console.error('Database connection error:', dbError);
+    return NextResponse.json(
+      { error: 'Database connection failed' },
+      { status: 500, headers: corsHeaders }
+    );
+  }
+
+  // Handle request
   try {
     const body = await request.json();
     const parsed = signupSchema.safeParse(body);
@@ -30,11 +43,10 @@ export async function POST(request) {
     if (!parsed.success) {
       return NextResponse.json(
         { error: 'Validation failed', details: parsed.error.issues },
-        { status: 400 }
+        { status: 400, headers: corsHeaders }
       );
     }
 
-    const { db } = await connectToDB();
     const existingUser = await db.collection('users').findOne({ 
       email: parsed.data.email.toLowerCase() 
     });
@@ -42,14 +54,14 @@ export async function POST(request) {
     if (existingUser) {
       return NextResponse.json(
         { error: 'User already exists' },
-        { status: 409 }
+        { status: 409, headers: corsHeaders }
       );
     }
 
     const hashedPassword = await bcrypt.hash(parsed.data.password, 10);
     const storeId = new ObjectId();
 
-    await db.collection('users').insertOne({
+    const result = await db.collection('users').insertOne({
       name: parsed.data.name,
       email: parsed.data.email.toLowerCase(),
       password: hashedPassword,
@@ -59,28 +71,34 @@ export async function POST(request) {
       role: 'owner'
     });
 
+    if (!result.acknowledged) {
+      throw new Error('User creation failed');
+    }
+
     return NextResponse.json(
-      { message: 'User created', storeId },
-      {
-        status: 201,
-        headers: {
-          'Access-Control-Allow-Origin': '*',
-          'Content-Type': 'application/json',
-        }
-      }
+      { 
+        message: 'User created', 
+        userId: result.insertedId,
+        storeId
+      },
+      { status: 201, headers: corsHeaders }
     );
 
   } catch (error) {
     console.error('Signup error:', error);
     return NextResponse.json(
-      { error: 'Internal server error' },
       { 
-        status: 500,
-        headers: {
-          'Access-Control-Allow-Origin': '*',
-          'Content-Type': 'application/json',
-        }
-      }
+        error: process.env.NODE_ENV === 'development' 
+          ? error.message 
+          : 'Internal server error'
+      },
+      { status: 500, headers: corsHeaders }
     );
   }
 }
+
+// Centralized CORS headers
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Content-Type': 'application/json'
+};
