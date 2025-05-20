@@ -90,7 +90,7 @@ export async function POST(request) {
       { 
         error: process.env.NODE_ENV === 'development' 
           ? error.message 
-          : 'Internal server error'
+          : error.message
       },
       { status: 500, headers: corsHeaders }
     );
