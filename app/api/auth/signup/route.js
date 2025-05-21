@@ -10,57 +10,95 @@ const signupSchema = z.object({
   password: z.string().min(6)
 });
 
+// Add CORS headers configuration
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type'
+};
+
+// Handle OPTIONS requests
+export async function OPTIONS() {
+  return new Response(null, {
+    status: 204,
+    headers: corsHeaders
+  });
+}
+
 export async function POST(request) {
-    const response = NextResponse.json({ message: 'User created' }, { status: 201 });
-  
-    // Add CORS headers
-    response.headers.set('Access-Control-Allow-Origin', process.env.NEXTAUTH_URL);
-    response.headers.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
-    response.headers.set('Access-Control-Allow-Headers', 'Content-Type');
-  
   try {
     const body = await request.json();
-    console.log(body)
     const parsed = signupSchema.safeParse(body);
     
     if (!parsed.success) {
-      return NextResponse.json(
-        { error: 'Validation failed', details: parsed.error.issues },
-        { status: 400 }
+      return new NextResponse(
+        JSON.stringify({ 
+          error: 'Validation failed', 
+          details: parsed.error.issues 
+        }),
+        { 
+          status: 400,
+          headers: {
+            ...corsHeaders,
+            'Content-Type': 'application/json'
+          }
+        }
       );
     }
 
     const { db } = await connectToDB();
-    const existingUser = await db.collection('users').findOne({ email: parsed.data.email });
+    const existingUser = await db.collection('users').findOne({ 
+      email: parsed.data.email.toLowerCase() 
+    });
 
     if (existingUser) {
-      return NextResponse.json(
-        { error: 'User already exists' },
-        { status: 400 }
+      return new NextResponse(
+        JSON.stringify({ error: 'User already exists' }),
+        { 
+          status: 409,
+          headers: {
+            ...corsHeaders,
+            'Content-Type': 'application/json'
+          }
+        }
       );
     }
 
     const hashedPassword = await bcrypt.hash(parsed.data.password, 10);
     
-    await db.collection('users').insertOne({
+    const result = await db.collection('users').insertOne({
       ...parsed.data,
       password: hashedPassword,
+      email: parsed.data.email.toLowerCase(),
       createdAt: new Date(),
       updatedAt: new Date()
     });
 
-    response.headers.set('Access-Control-Allow-Origin', process.env.NEXTAUTH_URL);
-    response.headers.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
-    response.headers.set('Access-Control-Allow-Headers', 'Content-Type');
-    
-    return response;
-        
+    return new NextResponse(
+      JSON.stringify({ 
+        message: 'User created', 
+        userId: result.insertedId 
+      }),
+      { 
+        status: 201,
+        headers: {
+          ...corsHeaders,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
 
   } catch (error) {
     console.error('Signup error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
+    return new NextResponse(
+      JSON.stringify({ error: 'Internal server error' }),
+      { 
+        status: 500,
+        headers: {
+          ...corsHeaders,
+          'Content-Type': 'application/json'
+        }
+      }
     );
   }
 }
