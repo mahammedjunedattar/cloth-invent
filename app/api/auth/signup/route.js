@@ -18,13 +18,18 @@ const corsHeaders = {
 };
 
 // Handle OPTIONS requests
+// app/api/auth/signup/route.js
 export async function OPTIONS() {
   return new Response(null, {
     status: 204,
-    headers: corsHeaders
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type',
+      'Vercel-CDN-Cache-Control': 'public, s-maxage=0'
+    }
   });
 }
-
 export async function POST(request) {
   try {
     const body = await request.json();
