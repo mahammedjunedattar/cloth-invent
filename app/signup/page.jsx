@@ -25,7 +25,6 @@ export default function SignupPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data)
       });
-      console.log(response)
 
       if (!response.ok) throw new Error('Signup failed');
       router.push('/login');
