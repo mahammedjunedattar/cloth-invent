@@ -1,6 +1,7 @@
 // app/api/auth/signup/route.js
 import { NextResponse } from 'next/server';
 import { connectToDB } from '@/app/lib/db';
+import { ObjectId } from 'mongodb';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 
@@ -10,125 +11,77 @@ const signupSchema = z.object({
   password: z.string().min(6)
 });
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type'
-};
-
-// middleware.js
-import { NextResponse } from 'next/server';
-import { NextRequest } from 'next/server';
-import { default as NextAuthMiddleware } from 'next-auth/middleware';
-
-// Configure allowed origins (modify for production)
-const allowedOrigins = [
-  process.env.NEXTAUTH_URL,
-  'http://localhost:3000'
-];
-
-// Security headers configuration
-const securityHeaders = {
-  'X-Content-Type-Options': 'nosniff',
-  'X-Frame-Options': 'DENY',
-  'X-XSS-Protection': '1; mode=block',
-  'Referrer-Policy': 'strict-origin-when-cross-origin',
-  'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
-};
-
-export async function middleware(request) {
-  // Handle CORS preflight requests
-  if (request.method === 'OPTIONS') {
-    return new Response(null, {
-      status: 204,
-      headers: {
-        ...securityHeaders,
-        'Access-Control-Allow-Origin': allowedOrigins.join(', '),
-        'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-      }
-    });
-  }
-
-  // Apply security headers to all responses
-  const response = NextResponse.next();
-  
-  Object.entries(securityHeaders).forEach(([key, value]) => {
-    response.headers.set(key, value);
-  });
-
-  // Handle NextAuth authentication for protected routes
-  const authMiddleware = await NextAuthMiddleware(request);
-  
-  // Bypass authentication for public routes
-  const pathname = request.nextUrl.pathname;
-  const isPublicRoute = [
-    '/api',
-    '/login',
-    '/signup',
-    '/_next',
-    '/favicon.ico'
-  ].some(path => pathname.startsWith(path));
-
-  return isPublicRoute ? response : authMiddleware;
-}
-
-export const config = {
-  matcher: [
-    {
-      source: '/((?!api|_next/static|_next/image|favicon.ico|login|signup).*)',
-      missing: [
-        { type: 'header', key: 'next-router-prefetch' },
-        { type: 'header', key: 'purpose', value: 'prefetch' }
-      ]
+// Add OPTIONS handler for CORS preflight
+export async function OPTIONS() {
+  return new Response(null, {
+    status: 204,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type',
+      'Vercel-CDN-Cache-Control': 'no-auth' // Add this line
     }
-  ]
-};
+  });
+}
 export async function POST(request) {
   try {
-    const client = await connectToDB();
-    const db = client.db();
-    
     const body = await request.json();
     const parsed = signupSchema.safeParse(body);
-
+    
     if (!parsed.success) {
       return NextResponse.json(
-        { error: parsed.error.errors },
-        { status: 400, headers: corsHeaders }
+        { error: 'Validation failed', details: parsed.error.issues },
+        { status: 400 }
       );
     }
 
-    const existingUser = await db.collection('users').findOne({
-      email: parsed.data.email.toLowerCase()
+    const { db } = await connectToDB();
+    const existingUser = await db.collection('users').findOne({ 
+      email: parsed.data.email.toLowerCase() 
     });
 
     if (existingUser) {
       return NextResponse.json(
-        { error: "User already exists" },
-        { status: 409, headers: corsHeaders }
+        { error: 'User already exists' },
+        { status: 409 }
       );
     }
 
     const hashedPassword = await bcrypt.hash(parsed.data.password, 10);
-    
+    const storeId = new ObjectId();
+
     await db.collection('users').insertOne({
-      ...parsed.data,
+      name: parsed.data.name,
+      email: parsed.data.email.toLowerCase(),
       password: hashedPassword,
       createdAt: new Date(),
-      updatedAt: new Date()
+      updatedAt: new Date(),
+      storeId,
+      role: 'owner'
     });
 
     return NextResponse.json(
-      { success: true },
-      { status: 201, headers: corsHeaders }
+      { message: 'User created', storeId },
+      {
+        status: 201,
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Content-Type': 'application/json',
+        }
+      }
     );
 
   } catch (error) {
     console.error('Signup error:', error);
     return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500, headers: corsHeaders }
+      { error: 'Internal server error' },
+      { 
+        status: 500,
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Content-Type': 'application/json',
+        }
+      }
     );
   }
 }
