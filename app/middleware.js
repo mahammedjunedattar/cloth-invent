@@ -1,67 +1,68 @@
 // middleware.js
-import { getToken } from 'next-auth/jwt';
 import { NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
+import { default as NextAuthMiddleware } from 'next-auth/middleware';
 
-// Protected routes configuration
-const protectedRoutes = [
-  '/Dashboard',
-  '/api/items',
-  '/api/stores',
-  '/inventory'
+// Configure allowed origins (modify for production)
+const allowedOrigins = [
+  process.env.NEXTAUTH_URL,
+  'http://localhost:3000'
 ];
 
-const authRoutes = [
-  '/login',
-  '/signup'
-];
+// Security headers configuration
+const securityHeaders = {
+  'X-Content-Type-Options': 'nosniff',
+  'X-Frame-Options': 'DENY',
+  'X-XSS-Protection': '1; mode=block',
+  'Referrer-Policy': 'strict-origin-when-cross-origin',
+  'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
+};
 
 export async function middleware(request) {
-  const { pathname } = request.nextUrl;
-  const token = await getToken({ req: request });
-  
-  // Check if route requires authentication
-  const isProtectedRoute = protectedRoutes.some(route => 
-    pathname.startsWith(route)
-  );
-
-  // Check if route is auth-related
-  const isAuthRoute = authRoutes.includes(pathname);
-
-  // Handle API routes
-  if (pathname.startsWith('/api')) {
-    if (!token?.storeId) {
-      return NextResponse.json(
-        { error: 'Unauthorized - Missing store context' },
-        { status: 401 }
-      );
-    }
-
-    // Clone headers to add store context
-    const requestHeaders = new Headers(request.headers);
-    requestHeaders.set('x-store-id', token.sub);
-
-    return NextResponse.next({
-      request: {
-        headers: requestHeaders
+  // Handle CORS preflight requests
+  if (request.method === 'OPTIONS') {
+    return new Response(null, {
+      status: 204,
+      headers: {
+        ...securityHeaders,
+        'Access-Control-Allow-Origin': allowedOrigins.join(', '),
+        'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
       }
     });
   }
 
-  // Redirect logged-in users from auth routes
-  if (isAuthRoute && token?.sub) {
-    return NextResponse.redirect(new URL('/Dashboard', request.url));
-  }
+  // Apply security headers to all responses
+  const response = NextResponse.next();
+  
+  Object.entries(securityHeaders).forEach(([key, value]) => {
+    response.headers.set(key, value);
+  });
 
-  // Protect routes for unauthenticated users
-  if (isProtectedRoute && !token?.sub) {
-    return NextResponse.redirect(new URL('/login', request.url));
-  }
+  // Handle NextAuth authentication for protected routes
+  const authMiddleware = await NextAuthMiddleware(request);
+  
+  // Bypass authentication for public routes
+  const pathname = request.nextUrl.pathname;
+  const isPublicRoute = [
+    '/api',
+    '/login',
+    '/signup',
+    '/_next',
+    '/favicon.ico'
+  ].some(path => pathname.startsWith(path));
 
-  return NextResponse.next();
+  return isPublicRoute ? response : authMiddleware;
 }
 
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico).*)',
-  ],
+    {
+      source: '/((?!api|_next/static|_next/image|favicon.ico|login|signup).*)',
+      missing: [
+        { type: 'header', key: 'next-router-prefetch' },
+        { type: 'header', key: 'purpose', value: 'prefetch' }
+      ]
+    }
+  ]
 };
