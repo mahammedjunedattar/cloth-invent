@@ -1,83 +1,80 @@
 // app/api/auth/signup/route.js
 import { NextResponse } from 'next/server';
-import { connectToDB } from '@/app/lib/db'; // adjust if this returns a MongoClient instead
-import { ObjectId } from 'mongodb';
+import { connectToDB } from '@/app/lib/db';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 
 const signupSchema = z.object({
   name: z.string().min(2),
   email: z.string().email(),
-  password: z.string().min(6),
+  password: z.string().min(6)
 });
 
-// Centralize your CORS headers so they’re identical everywhere
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
-  // If you ever send cookies or Authorization headers, add:
-  // 'Access-Control-Allow-Credentials': 'true',
-  // 'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type'
 };
 
-// 1) Respond to OPTIONS preflight
+// Handle OPTIONS requests first
 export async function OPTIONS() {
   return new Response(null, {
-    status: 200,
-    headers: {
-      ...corsHeaders,
-      'Vercel-CDN-Cache-Control': 'no-auth', // ensure Vercel won’t cache this
-    },
+    status: 204,
+    headers: corsHeaders
   });
 }
 
-// 2) If someone tries GET (or any method besides POST/OPTIONS), return 405 + CORS
-export async function GET() {
-  return NextResponse.json(
-    { error: 'Method GET not allowed. Use POST.' },
-    {
-      status: 405,
-      headers: corsHeaders,
-    }
-  );
-}
-
-// 3) Main POST handler (signup flow)
 export async function POST(request) {
   try {
-    // a) Parse + validate request body
     const body = await request.json();
     const parsed = signupSchema.safeParse(body);
+    
     if (!parsed.success) {
       return NextResponse.json(
-        { error: 'Validation failed', details: parsed.error.issues },
-        {
-          status: 400,
-          headers: corsHeaders,
-        }
+        { error: parsed.error.errors },
+        { status: 400, headers: corsHeaders }
       );
     }
 
-    // b) Connect to database
-    // — if connectToDB() returns { db }, use that. If it returns MongoClient, swap back accordingly.
-    const { db } = await connectToDB();
-    // If yours is: `const client = await connectToDB(); const db = client.db();`
-    // then do that instead.
+    const client = await connectToDB();
+    const db = client.db();
+    
+    const existingUser = await db.collection('users').findOne({ 
+      email: parsed.data.email.toLowerCase() 
+    });
 
-    // c) Check for existing user (case‐insensitive email)
-    const emailLower = parsed.data.email.toLowerCase();
-    const existingUser = await db.collection('users').findOne({ email: emailLower });
     if (existingUser) {
       return NextResponse.json(
-        { error: 'User already exists' },
-        {
-          status: 409,
-          headers: corsHeaders,
-        }
+        { error: "User already exists" },
+        { status: 409, headers: corsHeaders }
       );
     }
 
+    const hashedPassword = await bcrypt.hash(parsed.data.password, 10);
+    
+    const result = await db.collection('users').insertOne({
+      name: parsed.data.name,
+      email: parsed.data.email.toLowerCase(),
+      password: hashedPassword,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      storeId: new ObjectId().toString(),
+      role: 'owner'
+    });
+
+    return NextResponse.json(
+      { success: true, userId: result.insertedId },
+      { status: 201, headers: corsHeaders }
+    );
+
+  } catch (error) {
+    console.error('Signup error:', error);
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500, headers: corsHeaders }
+    );
+  }
+}
     // d) Hash password + assign a new storeId
     const hashedPassword = await bcrypt.hash(parsed.data.password, 10);
     const storeId = new ObjectId();
