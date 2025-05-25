@@ -24,7 +24,7 @@ export async function OPTIONS() {
   });
 }
 
-export async function POST(request) {
+export async const POST = (request) => {
   try {
     const body = await request.json();
     const parsed = signupSchema.safeParse(body);
