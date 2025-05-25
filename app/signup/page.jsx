@@ -18,20 +18,26 @@ export default function SignupPage() {
     resolver: zodResolver(signupSchema)
   });
 
-  const onSubmit = async (data) => {
-    try {
-      const response = await fetch('/api/auth/signup', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
-      });
-     console.log(response)
-      if (!response.ok) throw new Error('Signup failed');
-      router.push('/login');
-    } catch (error) {
-      alert(error.message);
+const onSubmit = async (data) => {
+  try {
+    const res = await fetch('/api/auth/signup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+
+    console.log('HTTP status:', res.status);
+    const payload = await res.json().catch(() => ({}));
+    console.log('Response JSON:', payload);
+
+    if (!res.ok) {
+      throw new Error(payload.error || 'Signup failed');
     }
-  };
+    router.push('/login');
+  } catch (err) {
+    alert(err.message);
+  }
+};
 
   return (
     <div className="max-w-md mx-auto mt-20 p-6 bg-white rounded shadow">
