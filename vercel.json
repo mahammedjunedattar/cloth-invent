@@ -1,29 +1,32 @@
 {
   "version": 2,
   "builds": [
-    { "src": "package.json", "use": "@vercel/next" }
+    {
+      "src": "package.json",
+      "use": "@vercel/next"
+    }
   ],
 
-  // 1) Add CORS headers on every /api/* response
   "headers": [
     {
       "source": "/api/:path*",
       "headers": [
         { "key": "Access-Control-Allow-Origin", "value": "*" },
         { "key": "Access-Control-Allow-Methods", "value": "GET, POST, OPTIONS" },
-        { "key": "Access-Control-Allow-Headers", "value": "Content-Type" }
+        { "key": "Access-Control-Allow-Headers", "value": "Content-Type, Authorization" }
       ]
     }
   ],
 
-  // 2) Any request to /api/* should be delegated to the Next.js API function
   "rewrites": [
     {
       "source": "/api/:path*",
       "destination": "/api/:path*"
     }
-  ]
+  ],
 
-  // (No "routes" block here—removed entirely.)
+  "cleanUrls": true,
+  "trailingSlash": false
 }
+
 
