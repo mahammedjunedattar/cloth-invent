@@ -146,7 +146,7 @@ export const authOptions = {
         path: '/',
         secure: process.env.NODE_ENV === 'production',
         domain: process.env.NODE_ENV === 'production'
-          ? process.env.COOKIE_DOMAIN || '.yourdomain.com'
+          ? process.env.COOKIE_DOMAIN || 'https://cloth-invent-o7vl'
           : undefined
       }
     }
