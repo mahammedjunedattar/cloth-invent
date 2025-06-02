@@ -1,10 +1,10 @@
 // app/api/items/route.js
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
-import { authOptions } from '../auth/[...nextauth]/route';
-import { connectToDB } from '@/app/lib/db';
+import { authOptions }     from '../auth/[...nextauth]/route';
+import { connectToDB }     from '@/app/lib/db';
 import rateLimitMiddleware from '@/app/lib/rateLimiter';
-import { validateItem } from '@/app/models/item';
+import { validateItem }    from '@/app/models/item';
 
 // 1) CORS headers used everywhere
 const corsHeaders = {
@@ -278,4 +278,5 @@ export async function PATCH(request) {
     );
   }
 }
+
 
