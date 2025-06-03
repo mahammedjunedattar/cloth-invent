@@ -32,7 +32,7 @@ export async function GET(request) {
     }
 
     // 3.b) Session validation
-    const session = await getServerSession(authOptions, request, NextResponse);
+    const session = await getServerSession(authOptions);
     if (!session?.user?.storeId) {
       return NextResponse.json(
         { error: 'Unauthorized access' },
@@ -121,7 +121,7 @@ export async function GET(request) {
 export async function POST(request) {
   try {
     // 4.a) Session validation
-    const session = await getServerSession(authOptions, request, NextResponse);
+    const session = await getServerSession(authOptions);
     if (!session?.user?.storeId) {
       return NextResponse.json(
         { error: 'Unauthorized access' },
@@ -212,7 +212,7 @@ export async function POST(request) {
 export async function PATCH(request) {
   try {
     // 5.a) Session validation
-    const session = await getServerSession(authOptions, request, NextResponse);
+    const session = await getServerSession(authOptions);
     if (!session?.user?.storeId) {
       return NextResponse.json(
         { error: 'Unauthorized access' },
@@ -278,5 +278,6 @@ export async function PATCH(request) {
     );
   }
 }
+
 
 
