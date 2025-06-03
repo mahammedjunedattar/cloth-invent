@@ -6,7 +6,7 @@ if (!uri) {
   throw new Error('MONGODB_URI environment variable is not defined');
 }
 
-// Allow overriding the DB name, default to the one in the URI
+// Optional override of the DB name; otherwise uses the one in the URI
 const dbName = process.env.MONGODB_DB;
 
 // Connection options
@@ -17,56 +17,94 @@ const options = {
   socketTimeoutMS: 45000,
 };
 
-// Use globalThis to persist across module reloads
-let cached = globalThis._mongo || { client: null, clientPromise: null, db: null };
+// Persist client across module reloads in development
+let cached = globalThis._mongo || { client: null, clientPromise: null };
 if (!globalThis._mongo) {
   globalThis._mongo = cached;
 }
 
-// Raw MongoClient promise for external adapters
+// Create a raw MongoClient promise for external adapters and one‐time index setup
 if (!cached.clientPromise) {
   cached.clientPromise = MongoClient.connect(uri, options)
     .then(client => {
       cached.client = client;
-      // Once connected, create indexes
+
+      // Once connected, ensure indexes exist
       const database = dbName ? client.db(dbName) : client.db();
-      database.collection('items').createIndexes([
-        { key: { sku: 1 }, unique: true },
-        { key: { lastUpdated: -1 } },
-      ]);
+      const itemsCol = database.collection('items');
+
+      // Create or confirm the unique + sparse SKU index
+      itemsCol.createIndex(
+        { sku: 1 },
+        { unique: true, sparse: true, name: 'sku_1' }
+      ).catch(error => {
+        if (error.code !== 86) {
+          // Re‐throw unexpected errors
+          throw error;
+        }
+        // If index already exists with correct specs, ignore
+      });
+
+      // Ensure a descending index on lastUpdated
+      itemsCol.createIndex(
+        { lastUpdated: -1 },
+        { name: 'lastUpdated_-1' }
+      ).catch(err => {
+        // If it already exists, no action needed
+        if (err.code !== 86) {
+          throw err;
+        }
+      });
+
       return client;
     });
 }
 
-/**
- * A promise that resolves to a connected MongoClient.
- * Useful for libraries that need access to the client itself.
- */
- const clientPromise = cached.clientPromise;
- export default clientPromise
+const clientPromise = cached.clientPromise;
 
 /**
- * Returns a connected { client, db } pair, caching both.
- * @returns {Promise<{ client: MongoClient, db: import('mongodb').Db }>}
+ * Returns a connected { client, db } pair.
+ * Automatically creates required indexes on 'items'.
  */
-let cachedClient = null;
-let cachedDb = null;
-
 export async function connectToDB() {
-  if (cachedClient && cachedDb) {
-    return { client: cachedClient, db: cachedDb };
+  const client = await clientPromise;
+  const databaseName = dbName || client.db().databaseName;
+  const db = client.db(databaseName);
+
+  const itemsCol = db.collection('items');
+
+  try {
+    // Ensure unique + sparse index on sku
+    await itemsCol.createIndex(
+      { sku: 1 },
+      { unique: true, sparse: true, name: 'sku_1' }
+    );
+  } catch (error) {
+    if (error.code !== 86) {
+      throw error;
+    }
+    // If index already exists with correct specs, ignore
   }
 
-  const client = await MongoClient.connect(uri);
-  const db = client.db(dbName);
-  
-  cachedClient = client;
-  cachedDb = db;
+  try {
+    // Ensure descending index on lastUpdated
+    await itemsCol.createIndex(
+      { lastUpdated: -1 },
+      { name: 'lastUpdated_-1' }
+    );
+  } catch (error) {
+    if (error.code !== 86) {
+      throw error;
+    }
+    // If index already exists, ignore
+  }
 
   return { client, db };
 }
 
-// Optional: Graceful shutdown in server environments
+export default clientPromise;
+
+// Graceful shutdown in environments that support SIGTERM
 if (typeof process !== 'undefined' && process.on) {
   process.on('SIGTERM', async () => {
     if (cached.client) {
